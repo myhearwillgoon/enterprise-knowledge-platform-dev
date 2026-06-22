@@ -1,0 +1,14 @@
+[
+  {
+    "page_number": 2,
+    "bbox": [36.0, 100.0, 300.0, 180.0],
+    "row_count": 3,
+    "col_count": 2,
+    "header_row": ["Order", "Status"],
+    "rows": [
+      ["Order", "Status"],
+      ["ORD-001", "Shipped"],
+      ["ORD-002", "Pending"]
+    ]
+  }
+]

@@ -1,0 +1,15 @@
+[
+  {
+    "page_number": 1,
+    "bbox": [36.0, 100.0, 300.0, 220.0],
+    "row_count": 4,
+    "col_count": 3,
+    "header_row": ["Name", "Age", "City"],
+    "rows": [
+      ["Name", "Age", "City"],
+      ["Alice", "30", "Beijing"],
+      ["Bob", "25", "Shanghai"],
+      ["Carol", "41", "Guangzhou"]
+    ]
+  }
+]

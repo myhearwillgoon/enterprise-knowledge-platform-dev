@@ -27,6 +27,7 @@ from .errors import (
     PdfTableSearchError,
 )
 from .extract import extract_tables
+from .query import query_directory
 
 EXIT_OK = 0
 EXIT_NOT_FOUND = 2
@@ -73,8 +74,12 @@ def cmd_extract(args: argparse.Namespace) -> int:
 def cmd_query(args: argparse.Namespace) -> int:
     """Handle ``pdf-table-search query <directory> <keyword>``.
 
-    Validates the target directory. Cell matching is not performed in this
-    phase, so an existing directory yields zero matches (empty stdout).
+    Validates the target directory, then searches every direct-child
+    ``*.tables.json`` file for rows whose cells contain the keyword
+    (case-insensitive substring). Each matching row is printed as one JSON
+    object on its own line (JSONL) with ``source``/``page``/``row_index``/
+    ``row`` fields. Zero matches -- including a directory with no extracted
+    files -- yield empty stdout and exit 0 (not an error).
     """
     directory = args.directory
     if not os.path.exists(directory):
@@ -82,7 +87,10 @@ def cmd_query(args: argparse.Namespace) -> int:
     if not os.path.isdir(directory):
         # Wrong filesystem type (e.g. a file): still a "not found" input.
         raise InputNotFoundError(f"Query directory not found or not a directory: {directory}")
-    # No matching logic is wired here; produce empty (zero-match) output.
+    # One JSON object per matching row, one per line (JSONL). An empty list
+    # writes nothing, so zero-match / no-files cases keep stdout empty.
+    for match in query_directory(directory, args.keyword):
+        sys.stdout.write(json.dumps(match) + "\n")
     return EXIT_OK
 
 
