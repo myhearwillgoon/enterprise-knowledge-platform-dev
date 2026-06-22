@@ -1,7 +1,9 @@
-"""Extraction tests for pdf-table-search (phase P2).
+"""Extraction tests for pdf-table-search (phase P2, consolidated P4).
 
-Subprocess-level coverage of the installed ``pdf-table-search extract`` CLI,
-backing gates G1 (table extraction schema) and the extract-side of G3:
+Subprocess-level coverage of the installed ``pdf-table-search extract`` CLI
+(invoked through the shared ``run_cli`` fixture in ``conftest.py``, which
+resolves the real console script), backing gates G1 (table extraction schema)
+and the extract-side of G3:
 
 * valid table PDF        -> JSON array with required field types, four-float
   bbox, positive row/column counts, and stable fixture row content.
@@ -22,19 +24,13 @@ detection quality or exact bbox coordinates.
 from __future__ import annotations
 
 import json
-import subprocess
 from pathlib import Path
 
-COMMAND = ["pdf-table-search"]
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
-def _run(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(COMMAND + args, capture_output=True, text=True)
-
-
-def test_extract_table_pdf_returns_json_array_with_required_fields() -> None:
-    result = _run(["extract", str(FIXTURES / "table.pdf")])
+def test_extract_table_pdf_returns_json_array_with_required_fields(run_cli) -> None:
+    result = run_cli("extract", str(FIXTURES / "table.pdf"))
     assert result.returncode == 0
     assert "Traceback" not in result.stdout
 
@@ -75,43 +71,43 @@ def test_extract_table_pdf_returns_json_array_with_required_fields() -> None:
     ]
 
 
-def test_extract_no_tables_pdf_prints_empty_list() -> None:
-    result = _run(["extract", str(FIXTURES / "no_tables.pdf")])
+def test_extract_no_tables_pdf_prints_empty_list(run_cli) -> None:
+    result = run_cli("extract", str(FIXTURES / "no_tables.pdf"))
     assert result.returncode == 0
     assert result.stdout == "[]\n"
     assert result.stderr == ""
     assert "Traceback" not in result.stdout
 
 
-def test_extract_corrupted_pdf_exits_3() -> None:
+def test_extract_corrupted_pdf_exits_3(run_cli) -> None:
     # Canonical G3 corrupted fixture: a text file renamed .pdf (no %PDF
     # signature), rejected by the CLI signature guard.
-    result = _run(["extract", str(FIXTURES / "corrupted.pdf")])
+    result = run_cli("extract", str(FIXTURES / "corrupted.pdf"))
     assert result.returncode == 3
     assert result.stdout == ""
     assert "Traceback" not in result.stdout
     assert "corrupted" in result.stderr.lower()
 
 
-def test_extract_truncated_pdf_exits_3() -> None:
+def test_extract_truncated_pdf_exits_3(run_cli) -> None:
     # Signature-valid but malformed body: pdfplumber cannot parse it, so
     # extract_tables wraps the failure as CorruptedInputError (exit 3) rather
     # than letting the library exception escape to the catch-all (exit 70).
     # This is the case flagged by the P1 review fix_hint.
-    result = _run(["extract", str(FIXTURES / "truncated.pdf")])
+    result = run_cli("extract", str(FIXTURES / "truncated.pdf"))
     assert result.returncode == 3
     assert result.stdout == ""
     assert "Traceback" not in result.stdout
     assert "corrupted" in result.stderr.lower()
 
 
-def test_extract_degenerate_empty_pdf_prints_empty_list(tmp_path: Path) -> None:
+def test_extract_degenerate_empty_pdf_prints_empty_list(run_cli, tmp_path: Path) -> None:
     # A signature-bearing but object-less PDF (header + EOF only) has no pages
     # and no tables. It is treated as a successful empty result (``[]``) under
     # the G3 "valid PDF with no tables" contract, not as corrupted.
     pdf = tmp_path / "degenerate.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
-    result = _run(["extract", str(pdf)])
+    result = run_cli("extract", str(pdf))
     assert result.returncode == 0
     assert result.stdout == "[]\n"
     assert "Traceback" not in result.stdout

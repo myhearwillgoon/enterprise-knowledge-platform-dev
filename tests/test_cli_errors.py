@@ -1,7 +1,10 @@
-"""CLI error-boundary tests for pdf-table-search (phase P1).
+"""CLI error-boundary tests for pdf-table-search (phase P1, consolidated P4).
 
-Exercises the installed ``pdf-table-search`` console script via subprocess to
-verify exit codes, stderr messages, and that stdout never contains a traceback.
+Exercises the installed CLI entry point via subprocess through the shared
+``run_cli`` fixture (see ``conftest.py``), which resolves the real
+``pdf-table-search`` console script -- or the module entry as a fallback -- and
+validates it once per session. Tests verify exit codes, stderr messages, and
+that stdout never contains a traceback.
 
 These tests back the four G3 must_haves:
 
@@ -16,92 +19,86 @@ plus the adjacent wrong-type input branches (directory to ``extract``, file to
 
 from __future__ import annotations
 
-import subprocess
-
-COMMAND = ["pdf-table-search"]
+from pathlib import Path
 
 
-def _run(args: list[str]) -> subprocess.CompletedProcess:
-    return subprocess.run(COMMAND + args, capture_output=True, text=True)
-
-
-def test_help_lists_subcommands() -> None:
-    result = _run(["--help"])
+def test_help_lists_subcommands(run_cli) -> None:
+    result = run_cli("--help")
     assert result.returncode == 0
     assert "extract" in result.stdout
     assert "query" in result.stdout
 
 
-def test_extract_nonexistent_file_exits_2() -> None:
-    result = _run(["extract", "/nonexistent/path/missing.pdf"])
+def test_extract_nonexistent_file_exits_2(run_cli) -> None:
+    result = run_cli("extract", "/nonexistent/path/missing.pdf")
     assert result.returncode == 2
     assert "not found" in result.stderr
     assert "Traceback" not in result.stdout
 
 
-def test_extract_nonexistent_file_keeps_stdout_clean(tmp_path) -> None:
-    result = _run(["extract", str(tmp_path / "does_not_exist.pdf")])
+def test_extract_nonexistent_file_keeps_stdout_clean(run_cli, tmp_path: Path) -> None:
+    result = run_cli("extract", str(tmp_path / "does_not_exist.pdf"))
     assert result.returncode == 2
     assert result.stdout == ""
     assert "not found" in result.stderr
 
 
-def test_extract_directory_target_exits_2(tmp_path) -> None:
+def test_extract_directory_target_exits_2(run_cli, tmp_path: Path) -> None:
     # An existing directory passed to extract is the wrong type of input and
     # must be rejected with exit 2 and a `not found` diagnostic.
-    result = _run(["extract", str(tmp_path)])
+    result = run_cli("extract", str(tmp_path))
     assert result.returncode == 2
     assert "not found" in result.stderr
     assert result.stdout == ""
     assert "Traceback" not in result.stdout
 
 
-def test_query_nonexistent_directory_exits_2() -> None:
-    result = _run(["query", "/nonexistent/path/empty_dir", "keyword"])
+def test_query_nonexistent_directory_exits_2(run_cli) -> None:
+    result = run_cli("query", "/nonexistent/path/empty_dir", "keyword")
     assert result.returncode == 2
     assert "not found" in result.stderr
     assert "Traceback" not in result.stdout
 
 
-def test_query_file_target_exits_2(tmp_path) -> None:
+def test_query_file_target_exits_2(run_cli, tmp_path: Path) -> None:
     # An existing file passed to query is the wrong type of input and must be
     # rejected with exit 2 and a `not found` diagnostic.
     target = tmp_path / "not_a_directory.txt"
     target.write_text("hello", encoding="utf-8")
-    result = _run(["query", str(target), "keyword"])
+    result = run_cli("query", str(target), "keyword")
     assert result.returncode == 2
     assert "not found" in result.stderr
     assert result.stdout == ""
     assert "Traceback" not in result.stdout
 
 
-def test_extract_corrupted_file_exits_3(tmp_path) -> None:
+def test_extract_corrupted_file_exits_3(run_cli, tmp_path: Path) -> None:
     corrupted = tmp_path / "corrupted.pdf"
     corrupted.write_text("this is not a pdf", encoding="utf-8")
-    result = _run(["extract", str(corrupted)])
+    result = run_cli("extract", str(corrupted))
     assert result.returncode == 3
     assert result.stdout == ""
     assert "Traceback" not in result.stdout
 
 
-def test_extract_valid_pdf_outputs_empty_list(tmp_path) -> None:
+def test_extract_valid_pdf_outputs_empty_list(run_cli, tmp_path: Path) -> None:
     # G3 must_have: a PDF with no tables exits 0 with stdout `[]`. A minimal
     # valid PDF (correct signature, no tables) exercises this.
     pdf = tmp_path / "empty.pdf"
     pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
-    result = _run(["extract", str(pdf)])
+    result = run_cli("extract", str(pdf))
     assert result.returncode == 0
     assert result.stdout == "[]\n"
     assert result.stderr == ""
     assert "Traceback" not in result.stdout
 
 
-def test_query_empty_directory_outputs_nothing(tmp_path) -> None:
+def test_query_empty_directory_outputs_nothing(run_cli, tmp_path: Path) -> None:
     # G3 must_have: a query directory with no extracted files exits 0 with
     # empty stdout (not an error).
     empty_dir = tmp_path / "empty_dir"
     empty_dir.mkdir()
-    result = _run(["query", str(empty_dir), "keyword"])
+    result = run_cli("query", str(empty_dir), "keyword")
     assert result.returncode == 0
     assert result.stdout == ""
     assert result.stderr == ""
