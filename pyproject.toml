@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf-table-search"
+version = "0.1.0"
+description = "CLI to extract tables from PDFs and search their cells by keyword."
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Lenovo EKP" }]
+# pdfplumber exposes table bounding boxes and extracted cells without
+# Java/Ghostscript runtime dependencies; it is the MVP extraction backend.
+dependencies = ["pdfplumber>=0.11"]
+
+[project.scripts]
+pdf-table-search = "pdf_table_search.cli:main"
+
+[project.optional-dependencies]
+test = ["pytest>=7"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
