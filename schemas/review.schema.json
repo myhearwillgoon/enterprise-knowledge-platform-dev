@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EKP Phase Review Output (Red Team)",
+  "description": "Adversarial review of one phase's code by an isolated Claude agent. Default to passed=false unless evidence of compliance is conclusive. Strict-mode: every object has additionalProperties=false and every property is required (use defaults for not-applicable).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["phase_id", "attempt", "passed", "findings", "verification_run", "regression_check", "scope_audit", "recommendation"],
+  "properties": {
+    "phase_id": { "type": "string", "pattern": "^P[0-9]+$" },
+    "attempt": { "type": "integer", "minimum": 1 },
+    "passed": {
+      "type": "boolean",
+      "description": "True iff: (a) all phase gates_satisfied are met with evidence, (b) verification commands exit 0, (c) no Critical/High findings, (d) no scope violations."
+    },
+    "findings": {
+      "type": "array",
+      "description": "Specific defects found. Empty array allowed only if passed=true.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "category", "file", "issue", "evidence", "fix_hint"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["Critical", "High", "Medium", "Low"] },
+          "category": {
+            "type": "string",
+            "enum": ["gate_unmet", "test_failure", "scope_violation", "regression", "code_smell", "missing_artifact"],
+            "description": "gate_unmet=phase gate not satisfied; scope_violation=changed file outside scope_globs; regression=broke a previously-passing test."
+          },
+          "file": { "type": "string", "description": "Path or 'N/A' for cross-cutting issues." },
+          "issue": { "type": "string", "description": "One sentence: what's wrong." },
+          "evidence": { "type": "string", "description": "Concrete proof: file:line excerpt, test output, command output." },
+          "fix_hint": { "type": "string", "description": "Specific suggestion for next iteration." }
+        }
+      }
+    },
+    "verification_run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "exit_code", "output_summary"],
+      "properties": {
+        "command": { "type": "string", "description": "Exact shell command run from phase.verification.how_to_test." },
+        "exit_code": { "type": "integer" },
+        "output_summary": { "type": "string", "description": "Truncated stdout/stderr, last 50 lines or relevant excerpt." }
+      }
+    },
+    "regression_check": {
+      "type": "object",
+      "description": "If prior phases existed, re-run their verification commands.",
+      "additionalProperties": false,
+      "required": ["prior_phases_re_run", "all_prior_still_pass"],
+      "properties": {
+        "prior_phases_re_run": {
+          "type": "array",
+          "description": "Phase IDs whose verification was re-run. Use [] if this is the first phase.",
+          "items": { "type": "string" }
+        },
+        "all_prior_still_pass": { "type": "boolean", "description": "True iff all prior_phases_re_run still pass (or true vacuously when array is empty)." }
+      }
+    },
+    "scope_audit": {
+      "type": "object",
+      "description": "Files changed in this attempt vs scope_globs.",
+      "additionalProperties": false,
+      "required": ["files_changed", "out_of_scope"],
+      "properties": {
+        "files_changed": {
+          "type": "array",
+          "description": "Every file the build agent created or modified.",
+          "items": { "type": "string" }
+        },
+        "out_of_scope": {
+          "type": "array",
+          "description": "Subset of files_changed that don't match any of the phase's scope_globs. Use [] if all changes were in scope.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "recommendation": {
+      "type": "string",
+      "enum": ["accept", "retry", "escalate"],
+      "description": "accept=move to next phase; retry=give findings back to build agent; escalate=human intervention needed."
+    }
+  }
+}

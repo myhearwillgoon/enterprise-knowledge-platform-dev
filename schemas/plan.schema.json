@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EKP Plan Output",
+  "description": "Codex hyperplan-style adversarial planning output. Each phase covers >=1 build.md Gate. Strict-mode JSON Schema: every object has additionalProperties=false and every property is required (use empty arrays/strings for not-applicable fields).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["adversarial_rounds", "phases", "global_risks", "gate_coverage_check"],
+  "properties": {
+    "adversarial_rounds": {
+      "type": "object",
+      "description": "Distilled output of the 5-role adversarial debate (Skeptic/Validator/Architect/Researcher/Creative).",
+      "additionalProperties": false,
+      "required": ["consensus", "unresolved_conflicts"],
+      "properties": {
+        "consensus": {
+          "type": "array",
+          "description": "Points all 5 roles agreed on after Round 3. Use [] if no consensus reached.",
+          "items": { "type": "string" }
+        },
+        "unresolved_conflicts": {
+          "type": "array",
+          "description": "Issues where roles still diverged. Use [] if everything reached consensus.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["topic", "positions", "resolution"],
+            "properties": {
+              "topic": { "type": "string", "description": "What the disagreement was about." },
+              "positions": {
+                "type": "array",
+                "description": "One bullet per dissenting view.",
+                "items": { "type": "string" }
+              },
+              "resolution": { "type": "string", "description": "How the plan handles the unresolved conflict (defer, flag for human, choose-one-rationale, etc.). Use empty string only if truly unresolvable." }
+            }
+          }
+        }
+      }
+    },
+    "phases": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Ordered execution phases. Each phase must declare its scope and which gates it satisfies.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "title", "objective", "scope_globs", "gates_satisfied", "deliverables", "verification", "dependencies", "risk_notes"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^P[0-9]+$", "description": "P1, P2, ..." },
+          "title": { "type": "string" },
+          "objective": { "type": "string", "description": "One paragraph: what this phase accomplishes." },
+          "scope_globs": {
+            "type": "array",
+            "description": "Files the build agent is ALLOWED to create/modify in this phase. Outside this list = guardrail violation.",
+            "items": { "type": "string" }
+          },
+          "gates_satisfied": {
+            "type": "array",
+            "description": "Gate IDs from build.md frontmatter that this phase fulfills (e.g., ['G1', 'G3']).",
+            "items": { "type": "string" }
+          },
+          "deliverables": {
+            "type": "array",
+            "description": "Concrete artifacts produced (e.g., 'src/parser.py', 'tests/test_parser.py').",
+            "items": { "type": "string" }
+          },
+          "verification": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["how_to_test", "expected_outcome"],
+            "properties": {
+              "how_to_test": { "type": "string", "description": "Shell command or test runner invocation the reviewer will use." },
+              "expected_outcome": { "type": "string", "description": "What success looks like (exit code, output pattern, file existence)." }
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "description": "Phase IDs this phase depends on (must complete first). Use [] for phases with no prerequisites.",
+            "items": { "type": "string" }
+          },
+          "risk_notes": { "type": "string", "description": "Phase-specific risks surfaced during adversarial round. Use empty string if none." }
+        }
+      }
+    },
+    "global_risks": {
+      "type": "array",
+      "description": "Cross-phase risks the build agent should be aware of. Use [] if no global risks.",
+      "items": { "type": "string" }
+    },
+    "gate_coverage_check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all_gates_covered", "uncovered_gates"],
+      "properties": {
+        "all_gates_covered": { "type": "boolean", "description": "True iff every gate in build.md frontmatter appears in at least one phase's gates_satisfied." },
+        "uncovered_gates": {
+          "type": "array",
+          "description": "Gate IDs from build.md that no phase covers. Should be empty; non-empty = plan is incomplete.",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EKP Final Acceptance Output",
+  "description": "Codex final verdict comparing delivered code against the ORIGINAL build.md (not the plan). Strict-mode: every object has additionalProperties=false and every property is required (use defaults for not-applicable).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["delivered", "gate_results", "summary", "blockers", "non_blocking_followups", "recommendation"],
+  "properties": {
+    "delivered": {
+      "type": "boolean",
+      "description": "True iff EVERY gate in build.md frontmatter has status=met with verified evidence."
+    },
+    "gate_results": {
+      "type": "array",
+      "description": "One entry per gate from build.md frontmatter. No gate may be skipped.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["gate_id", "gate_description", "status", "evidence", "concerns"],
+        "properties": {
+          "gate_id": { "type": "string" },
+          "gate_description": { "type": "string", "description": "Verbatim from build.md frontmatter for traceability." },
+          "status": { "type": "string", "enum": ["met", "partially_met", "not_met"] },
+          "evidence": { "type": "string", "description": "Concrete proof: file:line, test output, command execution. 'Looks correct' is NOT evidence." },
+          "concerns": { "type": "string", "description": "Latent risks even if status=met (e.g., 'works but no error handling for malformed input'). Empty string if none." }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "description": "<=300 words: overall delivery assessment for the human reviewer."
+    },
+    "blockers": {
+      "type": "array",
+      "description": "Specific reasons to NOT ship. Empty iff delivered=true.",
+      "items": { "type": "string" }
+    },
+    "non_blocking_followups": {
+      "type": "array",
+      "description": "Improvements suggested but not required for this delivery.",
+      "items": { "type": "string" }
+    },
+    "recommendation": {
+      "type": "string",
+      "enum": ["ship", "fix_blockers_and_re_run", "redesign"],
+      "description": "ship=delivery accepted; fix_blockers_and_re_run=address listed blockers and re-run Accept; redesign=plan is fundamentally off, go back to Plan phase."
+    }
+  }
+}

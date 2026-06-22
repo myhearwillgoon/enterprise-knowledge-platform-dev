@@ -1,0 +1,19 @@
+# EKP runtime state directory — never committed
+.ekp/
+
+# Codex session caches and temp prompt files
+*.codex-tmp
+combined-prompt.txt
+
+# OS / editor noise
+.DS_Store
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Node tooling (if anyone runs lint/format inside the skill repo)
+node_modules/
+package-lock.json
+yarn.lock
