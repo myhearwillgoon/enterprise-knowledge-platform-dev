@@ -4,7 +4,7 @@
   "description": "Adversarial review of one phase's code by an isolated Claude agent. Default to passed=false unless evidence of compliance is conclusive. Strict-mode: every object has additionalProperties=false and every property is required (use defaults for not-applicable).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["phase_id", "attempt", "passed", "findings", "verification_run", "regression_check", "scope_audit", "recommendation"],
+  "required": ["phase_id", "attempt", "passed", "findings", "verification_run", "regression_check", "scope_audit", "recommendation", "project_memory_used", "project_memory_hash", "requirement_doc_alignment"],
   "properties": {
     "phase_id": { "type": "string", "pattern": "^P[0-9]+$" },
     "attempt": { "type": "integer", "minimum": 1 },
@@ -79,6 +79,19 @@
       "type": "string",
       "enum": ["accept", "retry", "escalate"],
       "description": "accept=move to next phase; retry=give findings back to build agent; escalate=human intervention needed."
+    },
+    "project_memory_used": {
+      "type": "boolean",
+      "description": "True if this phase successfully read the project memory file (PROJECT_CONTEXT.md) at start; false if missing/unreadable. Required for audit trail."
+    },
+    "project_memory_hash": {
+      "type": ["string", "null"],
+      "description": "SHA-256 hex digest of the project memory file contents as read by this phase. null if the file was missing. Required so post-run audit can confirm all phases used the same memory snapshot."
+    },
+    "requirement_doc_alignment": {
+      "type": "string",
+      "enum": ["verified_aligned", "unavailable"],
+      "description": "verified_aligned = this phase's artifacts were explicitly checked against the requirement_doc path in project memory (the authoritative spec) and they align with it. unavailable = requirement_doc path was missing/unreadable, so final verification against authoritative spec was not possible. The authoritative spec must be the final fallback verification target."
     }
   }
 }

@@ -8,10 +8,11 @@ No prose outside the JSON. Just the JSON object.
 
 ## What you receive
 
-1. **The original `build.md`** at `.ekp/00-build.md` — this is the source of truth
+1. **The original `build.md`** at `.ekp/00-build.md` — the snapshot passed to this run
 2. **The plan** at `.ekp/01-plan.json` — for tracing how Gates were decomposed
 3. **The phase histories** at `.ekp/phase-P*/` — diff patches and review verdicts
 4. **The working tree** — final code and artifacts
+5. **Project memory** (in the combined prompt under `--- PROJECT MEMORY ---`) — read it FIRST. It points at `requirement_doc`, the authoritative spec file in the operator's requirement folder (e.g. `D:\Lenovo\Project management\Req\<version>\...-BUILD.md`). `requirement_doc` is the same content as the build.md snapshot, kept continuously injected as the single source of truth.
 
 ## Critical rules
 
@@ -36,6 +37,11 @@ No prose outside the JSON. Just the JSON object.
 
 6. **Don't introduce new requirements**. If build.md doesn't ask for logging, the absence of logging is at most a `non_blocking_followup`, not a blocker. You audit against build.md, not against your idea of best practice.
 
+7. **Requirement_doc is the final fallback verification target.** After your gate-by-gate audit against build.md, you MUST also verify the delivered artifacts align with `requirement_doc` (the authoritative spec path from project memory). Intermediate phase reviews do NOT substitute for this - the authoritative spec must be the final arbiter. Read `requirement_doc` directly and confirm every gate marked `met` actually satisfies it. If `requirement_doc` and the build.md snapshot disagree, `requirement_doc` wins and the disagreement is a blocker (surface it explicitly). Set the output fields:
+   - `project_memory_used` = true iff you read the project memory file successfully.
+   - `project_memory_hash` = the SHA-256 of the project memory file contents (null if missing).
+   - `requirement_doc_alignment` = `verified_aligned` only if you explicitly read requirement_doc and confirmed alignment; `unavailable` if the requirement_doc path was missing/unreadable.
+
 ## Recommendation selection
 
 - **`ship`** — every gate `status: met` with real evidence. `blockers` is empty.
@@ -49,5 +55,8 @@ No prose outside the JSON. Just the JSON object.
 - [ ] Every `gate_results[].evidence` is concrete (file:line OR command+result)
 - [ ] `delivered == true` ⟺ every gate is `met` AND `blockers` is empty
 - [ ] `summary` ≤300 words, written for a busy 上级 to make a yes/no call
+- [ ] `project_memory_used` set (true/false based on whether memory file was read)
+- [ ] `project_memory_hash` set to the SHA-256 of the memory file (null if missing)
+- [ ] `requirement_doc_alignment` set - and if `verified_aligned`, you actually read requirement_doc and confirmed every `met` gate satisfies it (this is the final fallback verification, not optional)
 
-Now read build.md, the plan, phase histories, run verifications, and emit the JSON verdict.
+Now read project memory FIRST, then build.md, the plan, phase histories, run verifications, verify requirement_doc alignment, and emit the JSON verdict.

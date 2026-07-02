@@ -1,10 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "EKP Final Acceptance Output",
-  "description": "Codex final verdict comparing delivered code against the ORIGINAL build.md (not the plan). Strict-mode: every object has additionalProperties=false and every property is required (use defaults for not-applicable).",
+  "description": "Codex final verdict comparing delivered code against the ORIGINAL build.md (not the plan). The requirement_doc path in the project memory file is the authoritative spec - gate verification must ultimately fall back to it. Strict-mode: every object has additionalProperties=false and every property is required (use defaults for not-applicable).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["delivered", "gate_results", "summary", "blockers", "non_blocking_followups", "recommendation"],
+  "required": ["delivered", "gate_results", "summary", "blockers", "non_blocking_followups", "recommendation", "project_memory_used", "project_memory_hash", "requirement_doc_alignment"],
   "properties": {
     "delivered": {
       "type": "boolean",
@@ -44,6 +44,19 @@
       "type": "string",
       "enum": ["ship", "fix_blockers_and_re_run", "redesign"],
       "description": "ship=delivery accepted; fix_blockers_and_re_run=address listed blockers and re-run Accept; redesign=plan is fundamentally off, go back to Plan phase."
+    },
+    "project_memory_used": {
+      "type": "boolean",
+      "description": "True if the final acceptance agent successfully read the project memory file (PROJECT_CONTEXT.md); false if missing/unreadable. Required for audit trail."
+    },
+    "project_memory_hash": {
+      "type": ["string", "null"],
+      "description": "SHA-256 hex digest of the project memory file contents as read during Accept. null if the file was missing. Required so post-run audit can confirm the acceptance verdict was computed against a known memory snapshot."
+    },
+    "requirement_doc_alignment": {
+      "type": "string",
+      "enum": ["verified_aligned", "unavailable"],
+      "description": "verified_aligned = gate_results were explicitly verified against the requirement_doc path in project memory (the authoritative spec), and every gate marked met actually satisfies the authoritative spec. unavailable = requirement_doc path was missing/unreadable, so final authoritative-spec verification was not possible. This is the final fallback verification - intermediate phase reviews do not substitute for it."
     }
   }
 }

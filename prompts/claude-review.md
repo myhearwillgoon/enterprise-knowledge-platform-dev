@@ -51,6 +51,20 @@ Spend ≤5 minutes scanning for `code_smell` findings (severity: Low/Medium):
 
 Grep for: `TODO`, `FIXME`, `NotImplementedError`, `pass  #`, `// TODO`, `throw new Error('not implemented')`. Any hit in `scope_globs` files = `gate_unmet` or `code_smell` finding (severity depends on whether the stub is on the gate's critical path).
 
+### Step 7 — Requirement_doc alignment (final fallback verification)
+
+Read the project memory file (the directive at the top of your prompt tells you the path and the `requirement_doc` path inside it). Then read `requirement_doc` directly - it is the authoritative spec (the file in the operator's requirement folder; same content as the build.md snapshot, kept as the single source of truth).
+
+Verify this phase's artifacts align with `requirement_doc`, not just with the phase's gate list. A phase can satisfy its declared gates yet still diverge from the authoritative spec - that divergence is a `gate_unmet` finding (severity: High) with `evidence` citing the requirement_doc section that is not honored.
+
+- If `requirement_doc` and the build.md snapshot disagree, `requirement_doc` wins; surface the disagreement as a finding.
+- If `requirement_doc` is missing/unreadable, you cannot complete this step - proceed but the final authoritative verification falls to the Accept phase.
+
+Set these output fields based on this step:
+- `project_memory_used` = true iff you read the project memory file successfully.
+- `project_memory_hash` = SHA-256 of the project memory file contents (run `sha256sum <path>`); null if missing.
+- `requirement_doc_alignment` = `verified_aligned` only if you read requirement_doc and confirmed this phase aligns with it; `unavailable` if the requirement_doc path was missing/unreadable.
+
 ## Adversarial mindset prompts (use these against yourself)
 
 - "If this build.md required X and X depends on edge case Y, did they test Y?"
