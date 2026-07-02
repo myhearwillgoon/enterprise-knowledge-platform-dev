@@ -377,6 +377,83 @@ Return: { ok, message, artifactPath?: "${ekpDir}/phase-${p.id}/attempt-${attempt
       continue
     }
 
+    // --- Evidence Gate (Node B) ---------------------------------------------
+    // A "build ok" self-report is NOT trusted. Before any review, verify four
+    // machine-checkable conditions against ground truth. This blocks the failure
+    // mode where a headless `claude -p` run reports success but actually exited
+    // on an auto-cancelled AskUserQuestion with zero real tool calls.
+    const evidenceGate = await agent(
+      `You are the Evidence Gate for phase ${p.id}, attempt ${attempt}. You do NOT
+write code. Run Bash to verify the build attempt's ground truth, then return a verdict.
+
+Working context:
+  - EKP state dir: ${ekpDir}
+  - Attempt artifact dir: ${ekpDir}/phase-${p.id}/attempt-${attempt}
+  - This phase scope_globs: ${fence(JSON.stringify(p.scope_globs || [], null, 2))}
+  - Verification command (from the plan): ${fence(p.verification?.how_to_test || '(none declared)')}
+
+Run these checks and capture the raw outputs:
+  1. SESSION PROVENANCE - find the most recent *.jsonl under
+     ~/.claude/projects/*ekp*/ (or the project slug matching the repo). Count
+     "type":"tool_use" and "type":"tool_result". Both must be >0 and their
+     counts must differ by at most 1 (paired). Also grep the last assistant
+     text for: cancelled|取消了|Could you let me know|not sure what - if ANY
+     matches, the build was auto-cancelled, not completed.
+  2. SCOPE AUDIT - run \`git diff --name-only HEAD\` in the repo root. Every
+     changed path MUST match at least one of this phase's scope_globs. Any
+     out-of-scope file = gate failure.
+  3. VERIFICATION RE-RUN - execute the phase's verification.how_to_test
+     command yourself from the repo root. Capture exit code. Exit 0 required.
+  4. ARTIFACT PRESENCE - confirm ${ekpDir}/phase-${p.id}/attempt-${attempt}/
+     exists and diff.patch is non-empty (wc -l > 0), OR that git diff shows
+     real changes (some phases legitimately produce no diff, e.g. config-only;
+     in that case verification re-run passing is sufficient).
+
+Return JSON { ok: boolean, message: string, checks: { provenance: boolean,
+scope: boolean, verification: boolean, artifact: boolean }, evidence: string }.
+Set ok=true ONLY if all four checks pass. The evidence field must cite the
+concrete commands + outputs you observed (counts, exit codes, file paths).
+Do not editorialize - if a check fails, name which one and quote the proof.`,
+      {
+        schema: {
+          type: 'object',
+          required: ['ok', 'message'],
+          properties: {
+            ok: { type: 'boolean' },
+            message: { type: 'string' },
+            checks: { type: 'object' },
+            evidence: { type: 'string' },
+          },
+        },
+        label: `evidence-gate:${p.id}#${attempt}`,
+        phase: 'Build',
+      }
+    )
+
+    if (!evidenceGate || !evidenceGate.ok) {
+      log(`   [GATE] Evidence Gate BLOCKED attempt ${attempt}: ${evidenceGate?.message || 'agent returned null'}`)
+      lastReview = {
+        phase_id: p.id,
+        attempt,
+        passed: false,
+        findings: [
+          {
+            severity: 'Critical',
+            category: 'missing_artifact',
+            file: 'N/A',
+            issue: 'Build self-report failed evidence gate - no proof the build actually ran',
+            evidence: evidenceGate ? evidenceGate.evidence || evidenceGate.message : 'evidence-gate agent returned null',
+            fix_hint: 'Do not trust the build self-report. Re-launch Build as an INTERACTIVE claude session reading .ekp/phase-' + p.id + '/handoff.md; never drive Build/Review with `claude -p` (it cannot answer AskUserQuestion and silently exits on escalation).',
+          },
+        ],
+        verification_run: { command: 'evidence-gate', exit_code: -1, output_summary: evidenceGate?.evidence || 'no evidence' },
+        recommendation: 'retry',
+      }
+      if (attempt === maxRetries) break
+      continue
+    }
+    log(`   ✅ Evidence Gate passed for attempt ${attempt}`)
+
     // --- Review sub-agent (separate worktree, red-team) ---
     const review = await agent(
       `You are the adversarial Reviewer for phase ${p.id}, attempt ${attempt}. Read

@@ -118,6 +118,40 @@ After Workflow returns, YOU (the calling session) write the human-facing summary
 
 The workflow agents are read/write within the `.ekp/` directory and project source; **you** are the one who eventually commits, opens PRs, or hands off.
 
+### Narrative Gate (Node C) - when an orchestrator (e.g. Codex) reports Claude's status to the user
+
+When the calling session is a Codex (or other non-Claude) orchestrator that
+spawned Claude for Build/Review and is now relaying progress to the human,
+its status claims about Claude are NOT trustworthy by default. A process being
+alive and a session `.jsonl` existing do not prove Claude did useful work — a
+headless `claude -p` run can exit on an auto-cancelled `AskUserQuestion` with
+zero tool calls while leaving a large `.jsonl` (the enqueued prompt itself
+inflates the file). Before reporting any Build/Review success, the orchestrator
+MUST verify against ground truth, not narrative:
+
+1. **Provenance** - the most recent `*.jsonl` under
+   `~/.claude/projects/<slug>/` has paired `tool_use`/`tool_result` records
+   (both counts > 0, differ by at most 1), AND the last assistant text does
+   NOT contain `cancelled` / `取消了` / `Could you let me know` /
+   `not sure what` (those signal an auto-cancelled escalation, not completion).
+2. **Scope** — `git diff --name-only HEAD` shows only files matching the
+   phase's `scope_globs`; no out-of-scope files.
+3. **Verification** - the orchestrator re-runs the phase's
+   `verification.how_to_test` itself and observes exit 0. Do not trust a
+   Build agent's self-reported "tests pass".
+4. **Narrative discipline** - when describing Claude's state to the user, cite
+   only three sources: the `.jsonl` tool-call records, `git diff`, and file
+   mtime/contents. Claims about Claude's intent, what it is "currently doing",
+   or what it "will do next" must be marked `[unverified, awaiting jsonl]`
+   until backed by a tool record. A phrase like "Claude is now modifying config
+   files and advancing Phase 2" is forbidden unless a `tool_use` of an
+   Edit/Write on a config file exists in the `.jsonl` for the current run.
+
+If any of 1-3 fails, the orchestrator reports `blocked` (not `success`) with
+the concrete evidence, and re-launches Build per the Host-Mode Gate (Node A):
+interactive `claude` reading a `handoff.md`, never a headless `claude -p` with
+an inline prompt.
+
 **Fallback — direct subagents** (older Claude Code without the Workflow tool). Run sequentially via Bash and the `Agent` tool, mimicking workflow.js phase by phase:
 
 1. `bash` step: `mkdir -p .ekp && cp <build.md> .ekp/00-build.md && codex exec --model gpt-5.5 --dangerously-bypass-approvals-and-sandbox --output-schema /home/lenovo/.claude/skills/lenovo-ekp/schemas/plan.schema.json -o .ekp/01-plan.json - < combined-prompt.txt` (combined-prompt.txt = codex-plan.md + separator + build.md)

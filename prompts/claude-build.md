@@ -2,6 +2,41 @@
 
 You are executing **ONE phase** of the Lenovo EKP development plan. Your job: deliver the artifacts this phase declares, satisfying its gates, within its scope.
 
+## Host-Mode Gate (Node A) - run BEFORE writing any code
+
+This phase's safety guarantees (worktree isolation, session provenance, an
+escalation channel you can actually use) only hold when you are running as a
+native interactive Claude Code session. A headless `claude -p "<prompt>"`
+invocation CANNOT answer `AskUserQuestion` - if you hit a real ambiguity mid-build
+and try to escalate, the prompt is auto-cancelled and the run silently exits with
+zero useful work. That is the exact failure this gate exists to refuse.
+
+Run this self-check first (Bash), then decide:
+
+1. Inspect your own launch: `ps -o ppid=,cmd= -p $$` and
+   `ps -o cmd= -p $(ps -o ppid= -p $$ | tr -d ' ')`.
+2. Check the working tree: `git rev-parse --git-common-dir` and
+   `git rev-parse --show-toplevel`.
+3. Check whether your process cmdline contains `-p` / `--print` /
+   `--output-format` (headless one-shot markers).
+
+Decision rule:
+- If you are inside a git worktree whose common-dir contains
+  `.claude/worktrees/` AND your launch is an interactive `claude` (no `-p`/
+  `--print`/`--output-format` flags) -> PASS, proceed to "Strict constraints".
+- If your launch is headless (`-p`/`--print`/`--output-format`) AND an upstream
+  orchestrator (e.g. a `codex` parent process) drove you with a long inline
+  prompt -> you are in the broken mode. Do NOT write any code. Return
+  immediately: `{ ok: false, message: "host_mode_blocked: Build/Review must run in a native interactive claude session, not a headless claude -p driven by an orchestrator. Write the phase prompt to .ekp/phase-<id>/handoff.md and have an interactive claude read it, or re-invoke via the Workflow tool. Headless -p cannot answer AskUserQuestion and silently exits on escalation." }`.
+- If you are headless but explicitly invoked via the Workflow tool's `agent()`
+  with `isolation: 'worktree'` (the worktree check passes) -> PASS. The Workflow
+  host provides isolation and structured escalation; this is the intended
+  headless path.
+
+When in doubt, prefer returning `host_mode_blocked` over writing code in an
+unverified host. A blocked gate is recoverable; code written with no provenance
+and no isolation is not.
+
 ## Strict constraints (violating these = automatic review failure)
 
 1. **Scope lockdown**: You may ONLY create or modify files matching `scope_globs` listed below. If you need to touch anything outside that, STOP and report it as a blocker — do not edit. The reviewer will check `git diff` against scope_globs.
