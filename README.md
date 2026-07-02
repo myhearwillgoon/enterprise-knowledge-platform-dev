@@ -1,7 +1,7 @@
 # lenovo-ekp
 
 > A Claude Code Skill that runs the Lenovo EKP knowledge-base development pipeline:
-> **Plan → Build → Review → Accept**, with cross-vendor model diversity (Codex GPT-5.5 for Plan and Accept, Claude for Build and adversarial Review). 3-strike escalation, worktree isolation, machine-checkable Gates.
+> **Plan → Build → Review → Accept**, with cross-vendor model diversity (Codex GPT-5.5 for Plan and Accept, Claude Code — the native CLI, not just the Claude model API — for Build and adversarial Review). 3-strike escalation, worktree isolation, machine-checkable Gates.
 
 ## Why this exists
 
@@ -133,6 +133,8 @@ This skill is built on [Loop Engineering](https://github.com/cobusgreyling/loop-
 
 ### Why Codex for Plan+Accept, Claude for Build+Review?
 The same model evaluating its own work has a measurable self-consistency bias. Different model families have different blind spots. The cross-vendor split provides a real (if modest) safety margin. Substitute any provider pair you trust — change `codex_model` and the codex CLI invocations.
+
+**The split is a property of the host process, not just the model.** "Claude" here means the native **Claude Code CLI**, not merely the Claude model API. The Build and Review phases depend on three things only native Claude Code provides: real git worktree isolation under `.claude/worktrees/`, `~/.claude/` session provenance (so every line of build output is traceable to a session log + file-history snapshot), and a Reviewer that runs as a distinct subagent process from the orchestrator. A host that shims `agent()` to the Claude model API — e.g. a Codex session invoking Claude inline — satisfies the model requirement in name only: it produces code with no `~/.claude/` trace, undefined worktree isolation, and a Reviewer sharing the orchestrator's context (the "different priors" margin collapses to one context). The workflow enforces this with a host-identity probe (`host_mismatch` status) before any Build work begins. If a run leaves build artifacts in the working tree but no `~/.claude/` session trace, the host was wrong and the output has not passed this pipeline's provenance/isolation guarantees.
 
 ### Why single-shot adversarial prompt instead of fan-out for Plan?
 `codex exec` is single-agent. Real fan-out (5 parallel reviewers) requires the host to have an Agent/Task primitive — which is exactly what Claude Code's Workflow tool gives, but Codex CLI doesn't. We encode the adversarial debate as a 5-role role-play within one prompt. We lose the strict independence of true parallel agents, but we keep the structural discipline (Skeptic / Validator / Architect / Researcher / Creative) and gain "one shell command" simplicity.

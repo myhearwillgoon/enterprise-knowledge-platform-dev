@@ -7,7 +7,15 @@ user-invocable: true
 
 # Lenovo EKP Development Pipeline
 
-Orchestrate end-to-end development of a Lenovo EKP feature from a `build.md` specification through Plan, Build (with red-team Review and 3-strike retry), and final Accept. Cross-vendor by design: **Codex (GPT-5.5)** does adversarial planning and acceptance; **Claude** does code execution and adversarial review. Models bring different priors — that's the safety margin.
+Orchestrate end-to-end development of a Lenovo EKP feature from a `build.md` specification through Plan, Build (with red-team Review and 3-strike retry), and final Accept. Cross-vendor by design: **Codex (GPT-5.5)** does adversarial planning and acceptance; **Claude Code** (the native CLI, powered by the Claude model) does code execution and adversarial review. Models bring different priors — that's the safety margin — but only when paired with the right host process (see below).
+
+> **"Claude" means the native Claude Code CLI, not merely the Claude model API.**
+> The Build and Review phases MUST execute as worktree-isolated subagents spawned by Claude Code's Workflow tool, running inside a `claude` process. Calling the Claude model API from another host (e.g. a Codex session that shims `agent()` to the Anthropic API) does **not** satisfy this — it silently breaks three things this skill relies on:
+> 1. **Provenance**: no `~/.claude/projects/<slug>/*.jsonl` session log, no `~/.claude/file-history/` snapshots. Build code lands in the working tree with zero traceable origin (you only find out when a search for the session comes back empty).
+> 2. **Worktree isolation**: `isolation: 'worktree'` only materializes a real git worktree under `.claude/worktrees/` when the host is native Claude Code. On a shim host the propagation step (`workflow.js` apply-the-patch-to-main-tree) operates on an undefined isolation primitive and can corrupt the main tree.
+> 3. **Reviewer independence**: the red-team Reviewer must be a distinct process/context from the orchestrator. A Codex session invoking the Claude model inline keeps Build, Review, and orchestration in one process — the "different priors" safety margin collapses to a single context.
+>
+> The cross-vendor safety margin is a property of **both** the model family AND the host process — not the model alone. If a run produces code but leaves no `~/.claude/` session trace, the host was wrong; the code may be usable but it has not passed this pipeline's provenance/isolation guarantees.
 
 > **MANDATORY first action when this skill is invoked**: say "Loaded lenovo-ekp skill. I will treat the provided build.md as the source of truth and run the pipeline accordingly." Do not improvise the pipeline — follow this document exactly.
 
@@ -32,6 +40,11 @@ codex --version          # must succeed; need codex-cli ≥0.134.0
 which codex              # must be on PATH
 test -d ~/.claude/skills/lenovo-ekp && echo skill_ok
 git rev-parse --show-toplevel   # MUST succeed — the session cwd must be inside a git repo
+# Host-identity probe (only meaningful in mode='continue', but verify now):
+#   the session cwd must resolve to a ~/.claude/projects/<slug>/ directory —
+#   i.e. this `claude` process was launched from inside the project git repo.
+#   If you are reading this from inside a Codex/other-LLM session, STOP:
+#   you are not the intended host. See the "Claude" definition above.
 ```
 
 If `codex` is missing, STOP and tell the user to install codex-cli (`npm i -g @openai/codex-cli` or per their org policy). Do not silently fall back to all-Claude — that defeats the cross-vendor design.

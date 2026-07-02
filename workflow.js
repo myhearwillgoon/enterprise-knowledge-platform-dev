@@ -249,6 +249,65 @@ if (!plan.phases || !plan.phases.length) {
   return { status: 'continue_blocked', message: 'Plan has no phases' }
 }
 
+// ---- Host-identity guard ------------------------------------------------
+// Build/Review require the native Claude Code CLI as host: real git worktree
+// isolation under .claude/worktrees/ + ~/.claude/ session provenance + a
+// Reviewer process distinct from the orchestrator. A shim host (e.g. a Codex
+// session that maps agent() to the Claude model API) would satisfy the
+// "Claude model" requirement in name only -- it breaks all three guarantees
+// above. Prove the host by materializing an isolated worktree and checking
+// its git common-dir lands under .claude/worktrees/, a structure only native
+// Claude Code creates. Do this BEFORE any phase work so a wrong host fails in
+// seconds, not after 30+ minutes of untraceable Build output.
+const hostProbe = await agent(
+  `You are a host-identity probe. Materialize an isolated worktree and report where git sees its common dir.
+
+Run these Bash commands:
+  1. git rev-parse --git-common-dir
+  2. git worktree list
+
+Return JSON:
+  {
+    "ok": true,
+    "commonDir": "<output of step 1, absolute path>",
+    "worktreeList": "<output of step 2>",
+    "isClaudeCodeWorktree": <boolean>
+  }
+
+Set isClaudeCodeWorktree = true ONLY if either commonDir or any line of the worktree list contains the path segment ".claude/worktrees/". A bare repo path, a temp dir, or an empty result means isClaudeCodeWorktree = false.
+
+Do not write any files. This is a read-only identity check.`,
+  {
+    schema: {
+      type: 'object',
+      required: ['ok', 'isClaudeCodeWorktree'],
+      properties: {
+        ok: { type: 'boolean' },
+        isClaudeCodeWorktree: { type: 'boolean' },
+        commonDir: { type: 'string' },
+        worktreeList: { type: 'string' },
+      },
+    },
+    label: 'host-probe',
+    phase: 'Build',
+    isolation: 'worktree',
+  }
+)
+
+if (!hostProbe || !hostProbe.isClaudeCodeWorktree) {
+  log(`[FAIL] Host-identity check failed -- not running under native Claude Code`)
+  return {
+    status: 'host_mismatch',
+    message:
+      'Build/Review require the native Claude Code CLI as host (real worktree isolation under .claude/worktrees/ plus ~/.claude/ session provenance and an independent Reviewer process). This session appears to be running inside another host (e.g. Codex) that maps agent() to the Claude model API. That satisfies "Claude model" in name only and breaks provenance, isolation, and reviewer independence.',
+    hint:
+      'Re-invoke from a native claude process inside the project git repo: e.g. `cd /mnt/d/Lenovo/ekp && claude` then `/lenovo-ekp <build.md>` (or `/lenovo-ekp --continue` to resume).',
+    commonDir: hostProbe ? hostProbe.commonDir : null,
+    phaseResults,
+  }
+}
+log(`[PASS] Host-identity check passed -- native Claude Code worktree confirmed`)
+
 phase('Build')
 
 const phaseResults = []
