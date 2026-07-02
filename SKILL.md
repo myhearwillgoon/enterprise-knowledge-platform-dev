@@ -85,10 +85,21 @@ Workflow({
     skillRoot: "/home/lenovo/.claude/skills/lenovo-ekp",
     mode: "plan",          // or "continue"
     maxRetries: 3,
-    codexModel: "gpt-5.5"
+    codexModel: "gpt-5.5",
+    projectMemoryPath: "/home/lenovo/.claude/skills/lenovo-ekp/memory/PROJECT_CONTEXT.md"  // optional; defaults to <skillRoot>/memory/PROJECT_CONTEXT.md
   }
 })
 ```
+
+### Project persistent memory (injected into all phases)
+
+Each pipeline phase runs in a fresh agent context with no inherited working memory. To keep every phase (Plan, Build, Review, Accept) anchored to the same project standing context - which file is the authoritative requirement spec, where the autonomous build prompt lives, where the test corpus is, which source tree to mutate - the skill reads **`memory/PROJECT_CONTEXT.md`** and injects it into all four phase prompts.
+
+- **Fill it in** by copying `memory/PROJECT_CONTEXT.example.md` to `memory/PROJECT_CONTEXT.md` and editing the `path:` lines to point at the real assets.
+- **It is gitignored.** Only the `.example.md` template is public. The filled-in copy points at internal assets and stays on the operator's machine - never commit it to a public repo.
+- **Priority**: the memory file is subordinate to explicit phase instructions and `build.md` gates, but it **overrides an agent's own assumptions**. If `requirement_doc` (the authoritative spec) conflicts with the `build.md` snapshot on a gate or scope boundary, `requirement_doc` wins and the delta must be surfaced.
+- **Failure mode**: if the file is missing or unreadable, phases proceed without it (non-fatal) and note "project memory unavailable" in their output. It is a standing anchor, not a hard dependency.
+- Override the path per-run via `args.projectMemoryPath` (must be an absolute path; subject to the same path-injection guardrails as other args).
 
 ### Two-phase invocation pattern (this is the human gate)
 

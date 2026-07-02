@@ -1,5 +1,9 @@
-# EKP runtime state directory — never committed
+# EKP runtime state directory - never committed
 .ekp/
+
+# Project persistent memory - operator-local, points at internal assets.
+# Only the .example.md template is public; the filled-in copy stays local.
+memory/PROJECT_CONTEXT.md
 
 # Codex session caches and temp prompt files
 *.codex-tmp
